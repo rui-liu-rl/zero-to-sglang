@@ -1,0 +1,87 @@
+# Builds the print-ready PDF of the ELI5 book (the eli5/ folder) and publishes it.
+#
+#   * runs when eli5/ changes on the `eli5-notes` branch (and on demand: Actions tab -> "ELI5 PDF" -> Run workflow)
+#   * uploads Letter and A4 PDFs as a workflow artifact (kept 30 days)
+#   * keeps ONE rolling pre-release, "eli5-pdf-latest", whose two PDFs are replaced on every build,
+#     so there is a stable download link:  <repo>/releases/tag/eli5-pdf-latest
+#
+# The build is `make pdf` (see eli5/Makefile and eli5/tools/build_pdf.py). Same command locally.
+#
+# Notes
+#   * This file is for this fork only. Do not include it in a pull request to the upstream course repo.
+#   * On a fork, GitHub keeps Actions switched off until you enable them once (Actions tab).
+#   * Delete the last step if you do not want a release; the artifact alone is enough.
+name: ELI5 PDF
+
+on:
+  push:
+    branches: [eli5-notes]
+    paths:
+      - 'eli5/**'
+      - 'Makefile'
+      - '.github/workflows/eli5-pdf.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write # only the last step needs this (creating/updating the release)
+
+concurrency:
+  group: eli5-pdf
+  cancel-in-progress: true
+
+jobs:
+  pdf:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: eli5/requirements-pdf.txt
+
+      # Fonts the book needs for box-drawing diagrams, symbols and the two Chinese characters in the tokenizer examples.
+      - name: Install fonts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends fonts-dejavu fonts-liberation fonts-wqy-microhei
+          fc-cache -f
+
+      - name: Check Chrome
+        run: google-chrome --version
+
+      # --no-sandbox: Chrome cannot create its sandbox inside the runner's user-namespace restrictions.
+      # It only ever renders our own generated HTML.
+      - name: Build PDFs (Letter and A4)
+        env:
+          CHROME_EXTRA_FLAGS: --no-sandbox
+        run: |
+          make pdf PAPER=letter
+          make pdf PAPER=a4
+          ls -la eli5/build/*.pdf
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: zero-to-sglang-eli5-pdf
+          path: eli5/build/zero-to-sglang-eli5-*.pdf
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Update the rolling release
+        if: github.ref == 'refs/heads/eli5-notes'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          short="${GITHUB_SHA::7}"
+          notes="Print-ready PDF of the ELI5 book, built from commit ${short} on ${GITHUB_REF_NAME}. Letter and A4. Rebuilt on every change to eli5/."
+          if gh release view eli5-pdf-latest >/dev/null 2>&1; then
+            gh release edit eli5-pdf-latest --notes "$notes"
+          else
+            gh release create eli5-pdf-latest --prerelease --target "$GITHUB_SHA" \
+              --title "ELI5 book (PDF), latest" --notes "$notes"
+          fi
+          gh release upload eli5-pdf-latest eli5/build/zero-to-sglang-eli5-*.pdf --clobber

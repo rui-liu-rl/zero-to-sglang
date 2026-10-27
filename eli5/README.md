@@ -155,6 +155,7 @@ Standard library only, so they run on this Mac. Run from the repo root with `pyt
 
 | Script | What it lets you check by running |
 |---|---|
+| `build_pdf.py` (with `book.css`, `../Makefile`) | Builds the print-ready PDF of this whole book: `make pdf` |
 | `check_comments_only.py` | That the commented mini-sglang code differs from `main` in comments only (AST for Python, comment-stripped text for C/C++/CUDA) |
 | `ch5_frontend_toy.py` | The front desk's `ack_map` / `event_map` logic: interleaved replies, one wake-up for many replies, the cleanup gap and its `finally` fix, late replies, blocking vs awaiting, 1 KB per leaked ticket |
 | `ch6_scheduler_toy.py` | The book's A/B/C scheduling trace, static vs continuous batching, the worst-case KV admission arithmetic, chunked prefill |
@@ -163,3 +164,17 @@ Standard library only, so they run on this Mac. Run from the repo root with `pyt
 | `ch9_tp_toy.py` | Column- and row-parallel maths, why column-then-row, the bias trap, vocab-parallel embedding and LM head, KV head replication, traffic and KV capacity vs TP, shard-then-merge for fused qkv |
 | `p3ch1_attention_toy.py` | The `n x n` score table at 32k, the book's 4x4 tiled example, split-KV merging, uneven decode work |
 | `p3ch3_hicache_toy.py` | Restore vs recompute (assumed bandwidths), continuous reuse across tiers, layerwise overlap, prefetch and wait policies, prefix fingerprints |
+
+## Building the PDF
+
+```bash
+make pdf              # US Letter -> eli5/build/zero-to-sglang-eli5-letter.pdf   (from the repo root or from eli5/)
+make pdf PAPER=a4     # A4        -> eli5/build/zero-to-sglang-eli5-a4.pdf
+make html             # only write eli5/build/book.html, to debug the layout in a browser
+```
+
+Needs Python 3.9+ and Chrome or Chromium (`CHROME=/path/to/chrome` if it is not found). The first run creates `eli5/.venv` and installs two packages (`requirements-pdf.txt`). It takes about 20 seconds.
+
+What you get: cover, contents with page numbers, 25 chapters grouped by part, two appendices, PDF bookmarks, mirrored binding margins for double-sided printing, a running header per chapter, `(p. N)` after every cross-reference, code blocks shrunk to fit the page, and every "Answer" box printed (dashed) after its question.
+
+On GitHub, `.github/workflows/eli5-pdf.yml` runs the same command whenever `eli5/` changes on the `eli5-notes` branch, uploads the PDFs as an artifact, and refreshes a rolling release called `eli5-pdf-latest`. (On a fork, enable Actions once in the Actions tab.)
